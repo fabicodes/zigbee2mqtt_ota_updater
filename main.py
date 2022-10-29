@@ -40,7 +40,7 @@ def on_connect(client, userdata, flags, rc):
 
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
-    global nicer_output_flag, only_once
+    global nicer_output_flag, only_once, otadict
     message = (msg.payload).decode("utf-8")
     obj = json.loads(message)
     match msg.topic:
@@ -57,14 +57,23 @@ def on_message(client, userdata, msg):
             handle_otasuccess(obj)
         case _:
             if obj["update"]:
+                device_fn = msg.topic.replace("zigbee2mqtt/", "")
                 if "remaining" in obj["update"]:
                     remaining_time = timedelta(seconds=obj["update"]["remaining"])
                     percent = obj["update"]["progress"]
-                    device_fn = msg.topic.replace("zigbee2mqtt/", "")
                     print(
                         f"Updating {device_fn} - {percent:6.2f}%, {remaining_time} remaining"
                     )
-                return
+                elif obj["update"]["state"] == "idle":
+                    r = list(
+                        filter(
+                            lambda x: x.updating and x.friendly_name == device_fn,
+                            otadict.values(),
+                        )
+                    )
+                    if r:
+                        otacleanup(r[0])
+
             # print(msg.topic)
             # print(obj)
 
@@ -121,13 +130,18 @@ def handle_otasuccess(obj):
             filter(lambda device: device.friendly_name == name, otadict.values())
         )
         if res:
-            dev: OtaDevice = res[0]
-            dev.updating = False
-            dev.update_available = False
-            currently_updating.remove(dev.ieee_addr)
-            print(
-                f"Update for {dev.friendly_name} finished - {len(possible_devices)} more updates to go"
-            )
+            otacleanup(res[0])
+
+
+def otacleanup(dev: OtaDevice):
+    global currently_updating, possible_devices
+    dev.updating = False
+    dev.update_available = False
+    currently_updating.remove(dev.ieee_addr)
+    print(
+        f"Update for {dev.friendly_name} finished - {len(possible_devices)} more updates to go"
+    )
+    client.unsubscribe(f"zigbee2mqtt/{dev.friendly_name}")
 
 
 def check_for_update(device: OtaDevice):
