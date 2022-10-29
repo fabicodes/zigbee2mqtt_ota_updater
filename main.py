@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import paho.mqtt.client as mqtt
 import json
 from datetime import timedelta
+from time import sleep
 
 ## SETUP YOUR MQTT SERVER HERE
 MQTT_SERVER = "hostname/ip"
@@ -193,8 +194,10 @@ while possible_devices:
     if len(currently_updating) < MAX_CONCURRENT_UPDATES:
         device = possible_devices.pop()
         start_update(device)
+    sleep(5)
 
 while len(currently_updating) != 0:
+    sleep(5)
     pass
 
 print("Finished updating")
