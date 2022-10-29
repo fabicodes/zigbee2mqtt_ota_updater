@@ -7,6 +7,8 @@ Quick and possibly dirty solution to update your massive Zigbee network's device
 
 ## Installation
 ```bash
+git clone https://github.com/fabicodes/zigbee2mqtt_ota_updater.git
+cd zigbee2mqtt_ota_updater
 pip install -r requirements.txt
 ```
 ## Configuration
