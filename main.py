@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-import paho.mqtt.client as mqtt
 import json
+from dataclasses import dataclass
 from datetime import timedelta
 from time import sleep
+
+import paho.mqtt.client as mqtt
 
 ## SETUP YOUR MQTT SERVER HERE
 MQTT_SERVER = "hostname/ip"
@@ -44,39 +45,36 @@ def on_message(client, userdata, msg):
     global nicer_output_flag, only_once, otadict
     message = (msg.payload).decode("utf-8")
     obj = json.loads(message)
-    match msg.topic:
-        case "zigbee2mqtt/bridge/devices":
-            if only_once:
-                handle_devicelist(obj)
-                only_once = False
-        case "zigbee2mqtt/bridge/response/device/ota_update/check":
-            if not nicer_output_flag:
-                print("Fetching update responses:")
-                nicer_output_flag = True
-            handle_otacheck(obj)
-        case "zigbee2mqtt/bridge/response/device/ota_update/update":
-            handle_otasuccess(obj)
-        case _:
-            if obj["update"]:
-                device_fn = msg.topic.replace("zigbee2mqtt/", "")
-                if "remaining" in obj["update"]:
-                    remaining_time = timedelta(seconds=obj["update"]["remaining"])
-                    percent = obj["update"]["progress"]
-                    print(
-                        f"Updating {device_fn} - {percent:6.2f}%, {remaining_time} remaining"
+    lower_topic = msg.topic.lower()
+    if lower_topic == "zigbee2mqtt/bridge/devices":
+        if only_once:
+            handle_devicelist(obj)
+            only_once = False
+    elif lower_topic == "zigbee2mqtt/bridge/response/device/ota_update/check":
+        if not nicer_output_flag:
+            print("Fetching update responses:")
+            nicer_output_flag = True
+        handle_otacheck(obj)
+    elif lower_topic == "zigbee2mqtt/bridge/response/device/ota_update/update":
+        handle_otasuccess(obj)
+    else:
+        if obj["update"]:
+            device_fn = msg.topic.replace("zigbee2mqtt/", "")
+            if "remaining" in obj["update"]:
+                remaining_time = timedelta(seconds=obj["update"]["remaining"])
+                percent = obj["update"]["progress"]
+                print(
+                    f"Updating {device_fn} - {percent:6.2f}%, {remaining_time} remaining"
+                )
+            elif obj["update"]["state"] == "idle":
+                r = list(
+                    filter(
+                        lambda x: x.updating and x.friendly_name == device_fn,
+                        otadict.values(),
                     )
-                elif obj["update"]["state"] == "idle":
-                    r = list(
-                        filter(
-                            lambda x: x.updating and x.friendly_name == device_fn,
-                            otadict.values(),
-                        )
-                    )
-                    if r:
-                        otacleanup(r[0])
-
-            # print(msg.topic)
-            # print(obj)
+                )
+                if r:
+                    otacleanup(r[0])
 
 
 def handle_devicelist(devicelist):
@@ -107,7 +105,7 @@ def handle_otacheck(obj):
     device: OtaDevice = otadict[ieee]
     if ieee in sent_request:
         sent_request.remove(ieee)
-    progress = f"[{num_total-len(sent_request)}/{num_total}]"
+    progress = f"[{num_total - len(sent_request)}/{num_total}]"
     if obj["status"] == "ok":
         device.update_available = obj["data"]["updateAvailable"]
         print(
@@ -176,7 +174,6 @@ if MQTT_USE_AUTH:
 print("Starting initialization")
 client.connect(MQTT_SERVER, MQTT_PORT, 60)
 client.loop_start()
-
 
 while not init_done:
     pass
